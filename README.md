@@ -109,6 +109,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to view th
 - `npm run start` — Run production server
 - `npm run lint` — Execute ESLint static analysis
 - `npm run typecheck` — Run TypeScript type checking without emitting files
+- `npm test` — Run Node.js test runner for persistence and deterministic change engine suites
 
 ---
 

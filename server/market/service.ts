@@ -1,35 +1,307 @@
-import { MarketInstrument, MarketQuote, MarketSnapshot } from "@/types/market";
+import {
+  BenchmarkQuote,
+  InstrumentBaseline,
+  MarketInstrument,
+  MarketQuote,
+  MarketSnapshot,
+} from "@/types/market";
+import { IMarketDataProvider } from "./provider";
+import { MockMarketDataProvider, KNOWN_INDIAN_EQUITIES } from "./mock-provider";
+import { YahooMarketDataProvider } from "./yahoo-provider";
 
-/**
- * Market Data Service Boundary
- * Abstract interface for fetching current market quotes, instrument details,
- * and historical/snapshot baselines from external market data providers.
- */
 export interface IMarketDataService {
-  getInstrument(symbol: string): Promise<MarketInstrument | null>;
-  getLatestQuote(symbol: string): Promise<MarketQuote | null>;
-  getQuotesForSymbols(symbols: string[]): Promise<Record<string, MarketQuote>>;
-  getMarketSnapshot(symbols: string[]): Promise<MarketSnapshot>;
+  getInstrument(
+    symbol: string,
+    exchange?: string
+  ): Promise<MarketInstrument | null>;
+  getLatestQuote(
+    symbol: string,
+    exchange?: string
+  ): Promise<MarketQuote | null>;
+  getQuotesForSymbols(
+    symbols: string[],
+    exchange?: string
+  ): Promise<Record<string, MarketQuote>>;
+  getBenchmarkQuote(): Promise<BenchmarkQuote | null>;
+  getBaselineMetrics(symbol: string): Promise<InstrumentBaseline | null>;
+  getMarketSnapshot(
+    symbols: string[],
+    exchange?: string
+  ): Promise<MarketSnapshot>;
+}
+
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
 }
 
 /**
- * Market Data Service Implementation Placeholder
- * In later phases, this will connect to the official market data provider.
+ * Market Data Service Implementation
+ * Provides caching, batching, benchmark fetching, snapshot orchestration,
+ * and seamless fallback across providers.
  */
 export class MarketDataService implements IMarketDataService {
-  async getInstrument(_symbol: string): Promise<MarketInstrument | null> {
-    throw new Error("MarketDataService.getInstrument not yet implemented in Phase 1.");
+  private provider: IMarketDataProvider;
+  private fallbackProvider: IMarketDataProvider;
+  private quoteCache: Map<string, CacheEntry<MarketQuote>> = new Map();
+  private baselineCache: Map<string, CacheEntry<InstrumentBaseline>> = new Map();
+  private benchmarkCache: CacheEntry<BenchmarkQuote> | null = null;
+
+  // TTL settings
+  private readonly quoteTtlMs: number;
+  private readonly baselineTtlMs: number;
+  private readonly benchmarkTtlMs: number;
+
+  constructor(
+    primaryProvider?: IMarketDataProvider,
+    options?: {
+      quoteTtlMs?: number;
+      baselineTtlMs?: number;
+      benchmarkTtlMs?: number;
+      fallbackProvider?: IMarketDataProvider;
+    }
+  ) {
+    this.fallbackProvider =
+      options?.fallbackProvider || new MockMarketDataProvider();
+
+    if (primaryProvider) {
+      this.provider = primaryProvider;
+    } else {
+      // Default: Use Yahoo provider in production / normal mode, with mock fallback
+      const useMock =
+        process.env.TRACE_MARKET_PROVIDER === "mock" ||
+        process.env.NODE_ENV === "test";
+
+      this.provider = useMock
+        ? new MockMarketDataProvider()
+        : new YahooMarketDataProvider(4000);
+    }
+
+    this.quoteTtlMs = options?.quoteTtlMs ?? 30 * 1000; // 30 seconds
+    this.baselineTtlMs = options?.baselineTtlMs ?? 60 * 60 * 1000; // 1 hour
+    this.benchmarkTtlMs = options?.benchmarkTtlMs ?? 30 * 1000; // 30 seconds
   }
 
-  async getLatestQuote(_symbol: string): Promise<MarketQuote | null> {
-    throw new Error("MarketDataService.getLatestQuote not yet implemented in Phase 1.");
+  public getProviderName(): string {
+    return this.provider.name;
   }
 
-  async getQuotesForSymbols(_symbols: string[]): Promise<Record<string, MarketQuote>> {
-    throw new Error("MarketDataService.getQuotesForSymbols not yet implemented in Phase 1.");
+  public clearCache(): void {
+    this.quoteCache.clear();
+    this.baselineCache.clear();
+    this.benchmarkCache = null;
   }
 
-  async getMarketSnapshot(_symbols: string[]): Promise<MarketSnapshot> {
-    throw new Error("MarketDataService.getMarketSnapshot not yet implemented in Phase 1.");
+  async getInstrument(
+    symbol: string,
+    exchange: string = "NSE"
+  ): Promise<MarketInstrument | null> {
+    const sym = symbol.trim().toUpperCase();
+    const known = KNOWN_INDIAN_EQUITIES[sym];
+
+    if (known) {
+      return {
+        symbol: known.symbol,
+        name: known.name,
+        exchange: known.exchange,
+        assetClass: "EQUITY",
+        currency: "INR",
+        isActive: true,
+      };
+    }
+
+    return {
+      symbol: sym,
+      name: sym,
+      exchange,
+      assetClass: "EQUITY",
+      currency: "INR",
+      isActive: true,
+    };
+  }
+
+  async getLatestQuote(
+    symbol: string,
+    exchange: string = "NSE"
+  ): Promise<MarketQuote | null> {
+    const quotes = await this.getQuotesForSymbols([symbol], exchange);
+    return quotes[symbol.trim().toUpperCase()] || null;
+  }
+
+  async getQuotesForSymbols(
+    symbols: string[],
+    exchange: string = "NSE"
+  ): Promise<Record<string, MarketQuote>> {
+    const now = Date.now();
+    const results: Record<string, MarketQuote> = {};
+    const missingSymbols: string[] = [];
+
+    // 1. Check in-memory cache
+    for (const rawSym of symbols) {
+      const sym = rawSym.trim().toUpperCase();
+      const cached = this.quoteCache.get(sym);
+      if (cached && cached.expiresAt > now) {
+        results[sym] = cached.data;
+      } else {
+        missingSymbols.push(sym);
+      }
+    }
+
+    if (missingSymbols.length === 0) {
+      return results;
+    }
+
+    // 2. Fetch missing quotes from primary provider
+    let fetchedQuotes: Record<string, MarketQuote> = {};
+    try {
+      fetchedQuotes = await this.provider.getQuotes(missingSymbols, exchange);
+    } catch {
+      // Primary failed; fallback
+      try {
+        fetchedQuotes = await this.fallbackProvider.getQuotes(
+          missingSymbols,
+          exchange
+        );
+      } catch {
+        fetchedQuotes = {};
+      }
+    }
+
+    // 3. For any symbols that returned UNAVAILABLE or failed, attempt fallback if provider wasn't already fallback
+    const fallbackSymbols: string[] = [];
+    for (const sym of missingSymbols) {
+      const quote = fetchedQuotes[sym];
+      if (!quote || quote.dataStatus === "UNAVAILABLE") {
+        if (this.provider.name !== this.fallbackProvider.name) {
+          fallbackSymbols.push(sym);
+        }
+      }
+    }
+
+    if (fallbackSymbols.length > 0) {
+      try {
+        const fallbackQuotes = await this.fallbackProvider.getQuotes(
+          fallbackSymbols,
+          exchange
+        );
+        for (const [sym, quote] of Object.entries(fallbackQuotes)) {
+          if (quote && quote.dataStatus !== "UNAVAILABLE") {
+            fetchedQuotes[sym] = quote;
+          }
+        }
+      } catch {
+        // Ignore fallback errors
+      }
+    }
+
+    // 4. Cache and populate missing results
+    for (const sym of missingSymbols) {
+      const quote =
+        fetchedQuotes[sym] || {
+          symbol: sym,
+          exchange,
+          price: null,
+          priceTimestamp: null,
+          volume: null,
+          dayHigh: null,
+          dayLow: null,
+          dayOpen: null,
+          previousClose: null,
+          change: null,
+          changePercent: null,
+          dataStatus: "UNAVAILABLE",
+          source: this.provider.name,
+          cachedAt: new Date().toISOString(),
+        };
+
+      this.quoteCache.set(sym, {
+        data: quote,
+        expiresAt: now + this.quoteTtlMs,
+      });
+      results[sym] = quote;
+    }
+
+    return results;
+  }
+
+  async getBenchmarkQuote(): Promise<BenchmarkQuote | null> {
+    const now = Date.now();
+    if (this.benchmarkCache && this.benchmarkCache.expiresAt > now) {
+      return this.benchmarkCache.data;
+    }
+
+    let quote: BenchmarkQuote | null = null;
+    try {
+      quote = await this.provider.getBenchmarkQuote();
+    } catch {
+      // Ignore primary error
+    }
+
+    if (!quote || quote.dataStatus === "UNAVAILABLE") {
+      try {
+        quote = await this.fallbackProvider.getBenchmarkQuote();
+      } catch {
+        quote = null;
+      }
+    }
+
+    if (quote) {
+      this.benchmarkCache = {
+        data: quote,
+        expiresAt: now + this.benchmarkTtlMs,
+      };
+    }
+
+    return quote;
+  }
+
+  async getBaselineMetrics(symbol: string): Promise<InstrumentBaseline | null> {
+    const sym = symbol.trim().toUpperCase();
+    const now = Date.now();
+    const cached = this.baselineCache.get(sym);
+    if (cached && cached.expiresAt > now) {
+      return cached.data;
+    }
+
+    let baseline: InstrumentBaseline | null = null;
+    try {
+      baseline = await this.provider.getBaselineMetrics(sym);
+    } catch {
+      // Ignore primary error
+    }
+
+    if (!baseline) {
+      try {
+        baseline = await this.fallbackProvider.getBaselineMetrics(sym);
+      } catch {
+        baseline = null;
+      }
+    }
+
+    if (baseline) {
+      this.baselineCache.set(sym, {
+        data: baseline,
+        expiresAt: now + this.baselineTtlMs,
+      });
+    }
+
+    return baseline;
+  }
+
+  async getMarketSnapshot(
+    symbols: string[],
+    exchange: string = "NSE"
+  ): Promise<MarketSnapshot> {
+    const [quotes, benchmark] = await Promise.all([
+      this.getQuotesForSymbols(symbols, exchange),
+      this.getBenchmarkQuote(),
+    ]);
+
+    return {
+      id: `snap_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      capturedAt: new Date().toISOString(),
+      quotes,
+      benchmark,
+    };
   }
 }

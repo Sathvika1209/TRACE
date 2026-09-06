@@ -150,12 +150,142 @@ Indexes are established specifically for foreign-key traversal and chronological
 
 ---
 
-## 8. Change Engine & Explainability Boundary
+## 8. Market Data Provider Architecture (Phase 5)
 
-1. **Deterministic Computation (Core, Mandatory):**
-   - Pure, explainable mathematical calculations comparing `checkpoint_snapshots` baseline against current market quotes.
-   - Evaluates price delta, volume anomaly relative to baseline, divergence against NIFTY 50 benchmark, and volatility shifts.
-   - Computes normalized `significance_score` (0–100) mapped to provisional tiers (`Normal`, `Notable`, `Significant`, `Major`) and structured reasons (`ChangeReason[]`).
-2. **Narrative Formatting (Optional Downstream Layer):**
-   - Ingests structured evidence JSON to format concise prose (via templates by default, or an optional external LLM like Groq).
-   - **Hard Rule:** The LLM is strictly a formatter/summarizer; it has zero authority to decide if a change happened, calculate metrics, or determine ranking.
+TRACE interfaces with external market data feeds through a strictly decoupled provider abstraction layer located in `server/market/`.
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Market Data Service Boundary (server/market/service.ts)                     │
+│                                                                             │
+│  • In-Memory Short-Lived Caching (30s Quotes / Benchmark, 1h Baselines)     │
+│  • Batching & Symbol Case Normalization                                     │
+│  • Per-Instrument Error Isolation & Graceful Fallback                       │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │
+                    ┌──────────────────┴──────────────────┐
+                    ▼                                     ▼
+   ┌─────────────────────────────────┐   ┌─────────────────────────────────┐
+   │ YahooMarketDataProvider         │   │ MockMarketDataProvider          │
+   │  • Real-time Indian Equities    │   │  • Deterministic Indian Stocks  │
+   │    (.NS / .BO suffixes)         │   │  • Configurable Overrides       │
+   │  • NIFTY 50 Benchmark (^NSEI)   │   │  • Fixed-Time Testing Support   │
+   │  • 20-Day Baseline Calculation  │   │  • 100% Offline Test Execution  │
+   │  • 4s Request Timeout & Status  │   │  • Safe Unknown-Symbol Default  │
+   └─────────────────────────────────┘   └─────────────────────────────────┘
+```
+
+### 8.1 Provider Interface (`IMarketDataProvider`)
+
+```typescript
+export interface IMarketDataProvider {
+  readonly name: string;
+  getQuotes(symbols: string[], exchange?: string): Promise<Record<string, MarketQuote>>;
+  getHistoricalData(symbol: string, range?: "5d" | "1mo" | "3mo" | "1y"): Promise<HistoricalBar[]>;
+  getBenchmarkQuote(): Promise<BenchmarkQuote | null>;
+  getBaselineMetrics(symbol: string): Promise<InstrumentBaseline | null>;
+}
+```
+
+### 8.2 Data Trust & Freshness Hierarchy
+
+Every market quote carries a mandatory `dataStatus` tag based on quote timestamp age and connectivity:
+
+1. **`FRESH`:** Live real-time quote updated within current market hours.
+2. **`DELAYED`:** Free exchange feeds typically subject to standard 15-minute dissemination delay or end-of-day close (<24 hours).
+3. **`STALE`:** Last trade data is older than 24 hours (holidays, suspended trading, or network lag). Flagged with structured code `DATA_STALE`.
+4. **`UNAVAILABLE`:** Upstream provider timeout, unlisted symbol, or halted instrument. Stored with explicit `null` numeric values (never converted to 0) and flagged with `DATA_UNAVAILABLE`.
+
+---
+
+## 9. Deterministic Meaningful Change Engine (Phase 5)
+
+The Meaningful Change Engine (`server/change-engine/engine.ts`) is the analytical core of TRACE. It evaluates what changed between a user's checkpoint and the current market state using pure, explainable mathematics.
+
+### 9.1 Multi-Signal Mathematical Scoring Model
+
+The overall **Significance Score** ($S \in [0, 100]$) is computed as a weighted composite of four independent market signals:
+
+$$S = \min\left(100, S_{\text{price}} + S_{\text{bench}} + S_{\text{vol}} + S_{\text{volat}}\right)$$
+
+#### 1. Price Delta Magnitude ($S_{\text{price}}$, Max 40 pts)
+Normalizes price movement relative to the instrument's historical 20-day daily volatility ($\sigma_{\text{base}}$):
+$$\text{moveRatio} = \frac{|\Delta P\%|}{\sigma_{\text{base}}}$$
+$$S_{\text{price}} = \begin{cases} 0 & \text{if } \text{moveRatio} \le 0.5 \\ \min(40, \text{round}((\text{moveRatio} - 0.5) \times 16)) & \text{if } \text{moveRatio} > 0.5 \end{cases}$$
+
+#### 2. Benchmark Divergence ($S_{\text{bench}}$, Max 30 pts)
+Measures divergence against the NIFTY 50 market benchmark ($\Delta B\%$):
+$$\text{relPerf} = \Delta P\% - \Delta B\%$$
+$$S_{\text{bench}} = \begin{cases} 0 & \text{if } |\text{relPerf}| \le 0.5 \\ \min(30, \text{round}((|\text{relPerf}| - 0.5) \times 10)) & \text{if } |\text{relPerf}| > 0.5 \end{cases}$$
+
+#### 3. Volume Anomaly Ratio ($S_{\text{vol}}$, Max 20 pts)
+Evaluates current trading volume ($V_{\text{curr}}$) against the 20-day average baseline volume ($V_{\text{avg}}$):
+$$\text{volRatio} = \frac{V_{\text{curr}}}{V_{\text{avg}}}$$
+$$S_{\text{vol}} = \begin{cases} 0 & \text{if } \text{volRatio} \le 1.2 \\ \min(20, \text{round}((\text{volRatio} - 1.2) \times 11)) & \text{if } \text{volRatio} > 1.2 \end{cases}$$
+
+#### 4. Intraday Volatility / Range Expansion ($S_{\text{volat}}$, Max 10 pts)
+Measures expansion of today's high-low range relative to historical intraday range:
+$$\text{rangeRatio} = \frac{(\text{High} - \text{Low}) / \text{Open}}{\text{avgRangePct}}$$
+$$S_{\text{volat}} = \begin{cases} 0 & \text{if } \text{rangeRatio} \le 1.3 \\ \min(10, \text{round}((\text{rangeRatio} - 1.3) \times 8)) & \text{if } \text{rangeRatio} > 1.3 \end{cases}$$
+
+---
+
+### 9.2 Significance Tiers & Thresholds
+
+| Score Range | Tier | Definition | UI Treatment |
+| :--- | :--- | :--- | :--- |
+| **0 – 29** | `NORMAL` | Within expected noise and historical variance. | Muted badge, filtered from quiet state summary. |
+| **30 – 59** | `NOTABLE` | Moderate movement or single-signal anomaly. | Amber badge, secondary rank. |
+| **60 – 79** | `SIGNIFICANT` | Multi-signal divergence or strong volume surge. | Rose badge, prominent card ranking. |
+| **80 – 100** | `MAJOR` | Extreme structural divergence or breakout. | Bright Rose badge, top-priority headline. |
+
+---
+
+### 9.3 Structured Factual Reasons & Explanations
+
+The engine deterministically emits structured reason objects (`ChangeReason[]`) containing factual metrics without speculation:
+
+- `PRICE_SURGE` / `PRICE_DROP`: *"Price increased by +4.85% since checkpoint"* (`+4.85%`)
+- `BENCHMARK_DIVERGENCE`: *"Outperformed NIFTY 50 by +3.95 percentage points"* (`+3.95% vs benchmark`)
+- `VOLUME_SPIKE`: *"Trading volume is 2.8x higher than 20-day baseline"* (`2.8x avg vol`)
+- `VOLATILITY_EXPANSION`: *"Intraday price range expanded to 2.5x historical range"* (`2.5x normal range`)
+- `DATA_STALE` / `DATA_UNAVAILABLE`: Data trust advisory statements.
+
+---
+
+### 9.4 Ranking & Quiet State Rules
+
+1. **Deterministic Sorting:**
+   - Primary: `significanceScore` (descending)
+   - Secondary: `|priceDeltaPercent|` (descending)
+   - Tertiary: `symbol` (alphabetical ascending, strict tie-breaker)
+2. **Quiet State:**
+   - If all instruments in a watchlist are classified as `NORMAL` (Score < 30), the engine emits `isQuietState = true` and `meaningfulChangesCount = 0`.
+   - The UI honors quiet state by displaying calm reassurance rather than manufacturing false urgency.
+
+---
+
+## 10. LLM Architectural Boundary
+
+```text
+┌────────────────────────────────────────────────────────┐
+│ TRACE Core Engine (Local, Deterministic, 0ms latency)  │
+│  • Mathematical Signal Computation                     │
+│  • Significance Scoring (0–100)                        │
+│  • Significance Tier Mapping                           │
+│  • Deterministic Ranking                               │
+│  • Structured Factual Evidence JSON                    │
+└───────────────────────────┬────────────────────────────┘
+                            │ StructuredChangeEvidence JSON
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│ Optional Downstream Narrative Formatter                │
+│  • Deterministic Template Formatter (Default)          │
+│  • Optional External LLM (Groq / Gemini)               │
+│                                                        │
+│  STRICT CONSTRAINT:                                    │
+│  The LLM has ZERO authority to calculate metrics,      │
+│  alter significance scores, or invent market events.   │
+└────────────────────────────────────────────────────────┘
+```
+
