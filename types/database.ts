@@ -1,7 +1,6 @@
 /**
- * Supabase Database Type Definitions Placeholder
- * This file will be populated with generated Supabase database types
- * (e.g. via `supabase gen types typescript`) once the database schema is established in Phase 2.
+ * Supabase PostgreSQL Database Type Definitions
+ * Source of truth: supabase/migrations/20260906000000_initial_trace_schema.sql
  */
 
 export type Json =
@@ -12,26 +11,177 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export interface Database {
+export type DataStatus = "FRESH" | "DELAYED" | "STALE" | "UNAVAILABLE";
+
+export type Database = {
   public: {
     Tables: {
-      // Tables will be defined deliberately in the database design phase.
-      [_: string]: {
-        Row: Record<string, unknown>;
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+      profiles: {
+        Row: {
+          id: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      watchlists: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          is_default: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          is_default?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          is_default?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      watchlist_instruments: {
+        Row: {
+          id: string;
+          watchlist_id: string;
+          symbol: string;
+          exchange: string;
+          display_name: string | null;
+          display_order: number;
+          added_at: string;
+        };
+        Insert: {
+          id?: string;
+          watchlist_id: string;
+          symbol: string;
+          exchange?: string;
+          display_name?: string | null;
+          display_order?: number;
+          added_at?: string;
+        };
+        Update: {
+          id?: string;
+          watchlist_id?: string;
+          symbol?: string;
+          exchange?: string;
+          display_name?: string | null;
+          display_order?: number;
+          added_at?: string;
+        };
+        Relationships: [];
+      };
+      checkpoints: {
+        Row: {
+          id: string;
+          user_id: string;
+          watchlist_id: string;
+          created_at: string;
+          metadata: Json | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          watchlist_id: string;
+          created_at?: string;
+          metadata?: Json | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          watchlist_id?: string;
+          created_at?: string;
+          metadata?: Json | null;
+        };
+        Relationships: [];
+      };
+      checkpoint_snapshots: {
+        Row: {
+          id: string;
+          checkpoint_id: string;
+          symbol: string;
+          exchange: string;
+          price: number | null;
+          price_timestamp: string | null;
+          volume: number | null;
+          day_high: number | null;
+          day_low: number | null;
+          day_open: number | null;
+          previous_close: number | null;
+          data_status: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          checkpoint_id: string;
+          symbol: string;
+          exchange?: string;
+          price?: number | null;
+          price_timestamp?: string | null;
+          volume?: number | null;
+          day_high?: number | null;
+          day_low?: number | null;
+          day_open?: number | null;
+          previous_close?: number | null;
+          data_status?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          checkpoint_id?: string;
+          symbol?: string;
+          exchange?: string;
+          price?: number | null;
+          price_timestamp?: string | null;
+          volume?: number | null;
+          day_high?: number | null;
+          day_low?: number | null;
+          day_open?: number | null;
+          previous_close?: number | null;
+          data_status?: string;
+          created_at?: string;
+        };
+        Relationships: [];
       };
     };
     Views: {
-      [_: string]: {
-        Row: Record<string, unknown>;
-      };
+      [_ in never]: never;
     };
     Functions: {
-      [_: string]: {
-        Args: Record<string, unknown>;
-        Returns: unknown;
+      create_checkpoint_with_snapshots: {
+        Args: {
+          p_watchlist_id: string;
+          p_snapshots: Json;
+          p_metadata?: Json | null;
+        };
+        Returns: string;
       };
     };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
   };
-}
+};

@@ -1,4 +1,4 @@
-import { MarketQuote } from "./market";
+import { DataStatus, Json } from "./database";
 
 /**
  * Checkpoint Domain Types
@@ -6,28 +6,49 @@ import { MarketQuote } from "./market";
  * from a user's previous session/visit.
  */
 
-export interface CheckpointInstrumentState {
+export interface CheckpointSnapshotItem {
+  id: string;
+  checkpointId: string;
   symbol: string;
-  price: number;
-  volume: number;
-  capturedAt: string; // ISO 8601 string
-  quoteSnapshot: MarketQuote;
+  exchange: string;
+  price: number | null;
+  priceTimestamp: string | null; // ISO 8601 UTC string
+  volume: number | null;
+  dayHigh?: number | null;
+  dayLow?: number | null;
+  dayOpen?: number | null;
+  previousClose?: number | null;
+  dataStatus: DataStatus;
+  createdAt: string; // ISO 8601 UTC string
 }
 
 export interface UserCheckpoint {
   id: string;
   userId: string;
   watchlistId: string;
-  createdAt: string; // ISO 8601 string
-  state: Record<string, CheckpointInstrumentState>;
+  createdAt: string; // ISO 8601 UTC string
   metadata?: {
     clientSessionId?: string;
     trigger?: "AUTOMATIC_VISIT" | "MANUAL_CHECKPOINT" | "SESSION_START";
-  };
+    [key: string]: unknown;
+  } | null;
+  snapshots?: CheckpointSnapshotItem[];
 }
 
-export interface CheckpointComparisonRequest {
+export interface CreateCheckpointInput {
   userId: string;
   watchlistId: string;
-  targetCheckpointId?: string; // Optional: compare against specific or latest checkpoint
+  snapshots: Array<{
+    symbol: string;
+    exchange?: string;
+    price: number | null;
+    priceTimestamp?: string | null;
+    volume?: number | null;
+    dayHigh?: number | null;
+    dayLow?: number | null;
+    dayOpen?: number | null;
+    previousClose?: number | null;
+    dataStatus?: DataStatus;
+  }>;
+  metadata?: Json | null;
 }

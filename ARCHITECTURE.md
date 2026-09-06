@@ -54,129 +54,108 @@ TRACE is structured as a **modular monolith** within Next.js. Business logic is 
                     ▼                                             ▼
        ┌─────────────────────────┐                   ┌────────────────────────┐
        │ Supabase (PostgreSQL)   │                   │ External Market Data   │
-       │  • User Watchlists      │                   │  • Indian Equities     │
-       │  • Checkpoints & State  │                   │  • NIFTY 50 Benchmark  │
-       │  • Snapshots            │                   │  • Volume & Volatility │
-       │  • RLS Access Control   │                   └────────────────────────┘
+       │  • User Profiles        │                   │  • Indian Equities     │
+       │  • Watchlists & Items   │                   │  • NIFTY 50 Benchmark  │
+       │  • Checkpoints & State  │                   │  • Volume & Volatility │
+       │  • Snapshots (Atomic)   │                   └────────────────────────┘
+       │  • Strict RLS Isolation │
        └─────────────────────────┘
 ```
 
 ---
 
-## 3. Frontend / Backend Boundaries
+## 3. Database Schema & Persistence Architecture (Phase 4)
 
-1. **Client Components (`app/`, `components/`)**:
-   - Focus exclusively on rendering state, user interactions, local UI toggles, and invoking Server Actions.
-   - **Never** import database clients, execute raw SQL, or calculate market change scoring.
-2. **Server Layer (`server/`)**:
-   - Contains all domain logic, service implementations, and data manipulation.
-   - Operates in a secure server-side runtime with full access to environment secrets and database credentials.
-3. **Database Access Layer (`lib/supabase/`)**:
-   - Isolated into browser (`client.ts`), server (`server.ts`), and middleware (`middleware.ts`) instances via `@supabase/ssr`.
-   - All queries enforce Supabase Row-Level Security (RLS) policies scoped to the authenticated user (`auth.uid()`).
-
----
-
-## 4. Proposed Module Boundaries
+### 3.1 Relational Ownership Model
 
 ```text
-trace/
-├── app/                      # Next.js App Router (Routes, Layouts, Route Handlers)
-├── components/               # Presentation Layer
-│   ├── ui/                   # Headless primitives (shadcn foundation)
-│   └── common/               # Shared presentational widgets
-├── lib/                      # Cross-cutting Utilities
-│   ├── supabase/             # SSR Supabase client wrappers & session middleware
-│   ├── validation/           # Input validation contracts & schemas
-│   └── utils.ts              # Styling & class merger utilities
-├── server/                   # Server-side Business & Domain Services
-│   ├── market/               # Market data abstraction & provider adapters
-│   ├── watchlist/            # Watchlist persistence & management logic
-│   ├── checkpoint/           # Checkpoint capture, retrieval & deduplication
-│   └── change-engine/        # Deterministic change detection & scoring engine
-├── types/                    # Shared TypeScript domain contracts
-│   ├── market.ts             # Quotes, instruments, snapshots, freshness
-│   ├── watchlist.ts          # Watchlists & item relations
-│   ├── checkpoint.ts         # Baseline state & checkpoint structures
-│   ├── change-engine.ts      # Structured evidence & ranked change items
-│   └── database.ts           # Supabase PostgreSQL schema types placeholder
-└── supabase/
-    └── migrations/           # Versioned SQL migration scripts
+auth.users (Supabase Auth)
+    │
+    ▼ (1:1)
+public.profiles
+    │
+    └── (1:N) public.watchlists
+                  │
+                  ├── (1:N) public.watchlist_instruments (Unique: watchlist_id + symbol + exchange)
+                  │
+                  └── (1:N) public.checkpoints (User Memory Baselines)
+                                │
+                                └── (1:N) public.checkpoint_snapshots (Observed Market State)
 ```
+
+### 3.2 Core Table Specifications
+
+1. **`profiles`:** Stores user-specific settings and preferences without duplicating auth credentials (`id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE`).
+2. **`watchlists`:** Named collections of instruments belonging to users (`id UUID PRIMARY KEY`, `user_id UUID REFERENCES auth.users(id)`, `name TEXT`, `is_default BOOLEAN`).
+3. **`watchlist_instruments`:** Normalized equity instruments mapped to watchlists (`watchlist_id UUID REFERENCES watchlists(id) ON DELETE CASCADE`, `symbol TEXT`, `exchange TEXT DEFAULT 'NSE'`, `display_name TEXT`, `display_order INTEGER`). Enforces `UNIQUE(watchlist_id, symbol, exchange)`.
+4. **`checkpoints`:** Discrete baseline snapshot events representing when a user observed their watchlist (`id UUID PRIMARY KEY`, `user_id UUID`, `watchlist_id UUID`, `created_at TIMESTAMPTZ`, `metadata JSONB`).
+5. **`checkpoint_snapshots`:** Granular observed market metrics for each instrument at a checkpoint (`checkpoint_id UUID REFERENCES checkpoints(id) ON DELETE CASCADE`, `symbol TEXT`, `exchange TEXT`, `price NUMERIC(14,4)`, `price_timestamp TIMESTAMPTZ`, `volume BIGINT`, `day_high`, `day_low`, `day_open`, `previous_close`, `data_status TEXT`).
+
+### 3.3 Data Types & Numeric Precision Strategy
+- **Prices & Deltas:** Stored as `NUMERIC(14, 4)` to prevent floating-point rounding errors common with financial figures.
+- **Trading Volume:** Stored as `BIGINT` (supporting multi-billion share volume counts).
+- **Timestamps:** Exclusively stored as `TIMESTAMPTZ` in UTC. Timezone conversions happen strictly on presentation layer based on user locale.
+- **Null Preservation:** Missing or unquoted metrics remain `NULL` (never fabricated into `0`).
 
 ---
 
-## 5. Data Flow & Checkpoint Memory Concept
+## 4. Row-Level Security (RLS) Strategy
 
-### Step-by-Step Data Flow
+Row-Level Security is **mandatory** and enabled on all 5 public tables. Application-level filtering is never solely relied upon for data privacy.
 
-```text
-1. User Session Initialization:
-   User logs in / visits -> Server retrieves latest Watchlist + most recent Checkpoint baseline.
-
-2. Market Data Retrieval:
-   Market Data Service fetches current quotes for all symbols in the watchlist plus the NIFTY 50 benchmark.
-
-3. Meaningful Change Evaluation:
-   Change Engine receives:
-     - Baseline Checkpoint State (quotes at timestamp T0)
-     - Current Market State (quotes at timestamp T1)
-     - Benchmark Index State (NIFTY 50 at T0 and T1)
-
-4. Deterministic Scoring & Structured Evidence Output:
-   Change Engine evaluates mathematical signals (price movement, volume ratio, NIFTY divergence)
-   and produces structured evidence:
-   {
-     symbol: "TATAMOTORS",
-     price_change: 4.85,
-     volume_ratio: 2.80,
-     relative_market_performance: 3.95,
-     significance_score: 78,
-     reasons: [...]
-   }
-
-5. Checkpoint Memory & Baseline Update:
-   Server records a new checkpoint baseline (or updates last-seen checkpoint according to cadence policy).
-   The system retains memory of what was shown to prevent redundant alert fatigue.
-
-6. Presentation:
-   UI renders the ranked change feed ("Your TRACE") with data freshness indicators and structured reasons.
-   If no changes meet threshold, a quiet valid state is displayed.
-```
+| Table | SELECT Policy | INSERT / UPDATE / DELETE Policy |
+| :--- | :--- | :--- |
+| `profiles` | `auth.uid() = id` | `auth.uid() = id` |
+| `watchlists` | `auth.uid() = user_id` | `auth.uid() = user_id` |
+| `watchlist_instruments` | Subquery joins `watchlists.user_id = auth.uid()` | Subquery joins `watchlists.user_id = auth.uid()` |
+| `checkpoints` | `auth.uid() = user_id` | `auth.uid() = user_id AND watchlists.user_id = auth.uid()` |
+| `checkpoint_snapshots` | Subquery joins `checkpoints.user_id = auth.uid()` | Subquery joins `checkpoints.user_id = auth.uid()` |
 
 ---
 
-## 6. Change Engine Boundary & Explainability Model
+## 5. Checkpoint Transactional Atomicity
 
-The **Meaningful Change Engine** is decoupled into two distinct layers:
+To eliminate partial checkpoint states (e.g., checkpoint row inserted but network drops before all snapshots are written), checkpoint creation is encapsulated within an atomic PostgreSQL stored procedure:
+
+```sql
+CREATE OR REPLACE FUNCTION public.create_checkpoint_with_snapshots(
+  p_watchlist_id UUID,
+  p_snapshots JSONB,
+  p_metadata JSONB DEFAULT NULL
+) RETURNS UUID;
+```
+
+This ensures that:
+- Checkpoint header creation and all instrument snapshot rows execute inside a single transactional block (`BEGIN ... COMMIT`).
+- Watchlist ownership is validated within PostgreSQL security context.
+- If any snapshot fails insertion, the entire checkpoint transaction rolls back cleanly.
+
+---
+
+## 6. Indexing & Query Optimization
+
+Indexes are established specifically for foreign-key traversal and chronological lookups:
+- `idx_watchlists_user_id` on `watchlists(user_id)`
+- `idx_watchlist_instruments_watchlist_id` on `watchlist_instruments(watchlist_id)`
+- `idx_checkpoints_user_watchlist` on `checkpoints(user_id, watchlist_id, created_at DESC)`
+- `idx_checkpoint_snapshots_checkpoint_id` on `checkpoint_snapshots(checkpoint_id)`
+- `idx_checkpoint_snapshots_symbol_exchange` on `checkpoint_snapshots(symbol, exchange)`
+
+---
+
+## 7. User Onboarding & Default Watchlist Strategy
+
+1. **Database Trigger Automation:** The PostgreSQL trigger `on_auth_user_created` on `auth.users` automatically provisions a `profiles` record and creates a default primary watchlist (`Main Watchlist`, `is_default = true`).
+2. **Server-Side Fallback:** [`WatchlistService.getOrCreateDefaultWatchlist()`](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/server/watchlist/service.ts) ensures that even if trigger execution is skipped in local mocking or migration edge cases, the application lazily provisions the user's primary watchlist.
+
+---
+
+## 8. Change Engine & Explainability Boundary
 
 1. **Deterministic Computation (Core, Mandatory):**
-   - Pure, explainable mathematical calculations.
+   - Pure, explainable mathematical calculations comparing `checkpoint_snapshots` baseline against current market quotes.
    - Evaluates price delta, volume anomaly relative to baseline, divergence against NIFTY 50 benchmark, and volatility shifts.
-   - Computes a normalized `significance_score` (0–100) mapped to provisional tiers (`Normal`, `Notable`, `Significant`, `Major`) and structured reasons (`ChangeReason[]`).
+   - Computes normalized `significance_score` (0–100) mapped to provisional tiers (`Normal`, `Notable`, `Significant`, `Major`) and structured reasons (`ChangeReason[]`).
 2. **Narrative Formatting (Optional Downstream Layer):**
-   - Takes the output `StructuredChangeEvidence` and formats it into concise prose (via deterministic templates by default, or an optional external LLM like Groq).
+   - Ingests structured evidence JSON to format concise prose (via templates by default, or an optional external LLM like Groq).
    - **Hard Rule:** The LLM is strictly a formatter/summarizer; it has zero authority to decide if a change happened, calculate metrics, or determine ranking.
-
----
-
-## 7. Reliability, Data Freshness & UX State Handling
-
-- **Data Trust Taxonomy:** Every market quote and checkpoint delta is classified into one of four states:
-  - `FRESH`: Quote timestamp is within current market threshold.
-  - `DELAYED`: Upstream exchange feed is standard 15m delayed.
-  - `STALE`: Quote timestamp exceeds threshold; amber warning badge rendered.
-  - `UNAVAILABLE`: Upstream provider unreachable or instrument halted; fallback to last snapshot.
-- **Provider Resilience:** The `IMarketDataService` interface isolates external API specifics, enabling caching, failover, or mock simulation for testing.
-- **Quiet State Support:** A return visit with no abnormal movements is handled as a first-class, valid state rather than an error or empty state.
-
----
-
-## 8. Open Architecture Decisions & Trade-offs
-
-| Decision | Option A | Option B | Selected / Current Posture | Trade-off Analysis |
-| :--- | :--- | :--- | :--- | :--- |
-| **Backend Architecture** | Modular Monolith (Next.js App Router + Server Actions) | Microservices (Next.js + separate FastAPI service) | **Modular Monolith** | Avoids multi-service deployment complexity and latency while keeping module boundaries strictly isolated. |
-| **State Snapshot Storage** | PostgreSQL JSONB column per checkpoint | Normalized relational rows per instrument | **To be finalized in DB design phase** | JSONB offers snapshot immutability and fast single-record fetch; relational allows SQL-level aggregations. |
-| **Market Data Refresh** | Window focus + manual refresh | Realtime WebSockets / SSE | **Window focus + on-demand for MVP** | Conserves API quotas and aligns with discrete checkpoint return journey; WebSockets deferred to stretch. |
-| **LLM Explanation Provider** | Groq (Llama 3 inference) | Local / Self-hosted model | **Groq (Deferred to stretch)** | Fast, low-latency API without heavy infrastructure overhead; product works 100% without it. |
