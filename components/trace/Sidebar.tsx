@@ -84,8 +84,8 @@ export function Sidebar({ className }: { className?: string }) {
         })}
       </nav>
 
-      {/* Memory Layer Baseline Status Footer */}
-      <div className="p-3 border-t border-border bg-surface/50 text-[11px] space-y-1.5">
+      {/* Memory Layer Baseline & User Account Footer */}
+      <div className="p-3 border-t border-border bg-surface/50 text-[11px] space-y-2">
         <div className="flex items-center justify-between text-text-muted">
           <span className="flex items-center gap-1.5 font-medium">
             <Shield className="h-3 w-3 text-brand-secondary" />
@@ -94,7 +94,7 @@ export function Sidebar({ className }: { className?: string }) {
           <span className="text-[10px] text-positive font-mono">Active</span>
         </div>
         <div className="text-[10px] text-text-muted truncate font-mono">
-          Last Check: 10:15 AM IST
+          Indian Equities · NIFTY 50
         </div>
       </div>
     </aside>

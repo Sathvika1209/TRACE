@@ -22,6 +22,10 @@ export interface IMarketDataService {
     symbols: string[],
     exchange?: string
   ): Promise<Record<string, MarketQuote>>;
+  getHistoricalData(
+    symbol: string,
+    range?: "5d" | "1mo" | "3mo" | "1y"
+  ): Promise<import("@/types/market").HistoricalBar[]>;
   getBenchmarkQuote(): Promise<BenchmarkQuote | null>;
   getBaselineMetrics(symbol: string): Promise<InstrumentBaseline | null>;
   getMarketSnapshot(
@@ -286,6 +290,21 @@ export class MarketDataService implements IMarketDataService {
     }
 
     return baseline;
+  }
+
+  async getHistoricalData(
+    symbol: string,
+    range: "5d" | "1mo" | "3mo" | "1y" = "1mo"
+  ): Promise<import("@/types/market").HistoricalBar[]> {
+    try {
+      return await this.provider.getHistoricalData(symbol, range);
+    } catch {
+      try {
+        return await this.fallbackProvider.getHistoricalData(symbol, range);
+      } catch {
+        return [];
+      }
+    }
   }
 
   async getMarketSnapshot(

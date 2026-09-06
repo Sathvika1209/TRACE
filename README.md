@@ -113,9 +113,24 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to view th
 
 ---
 
-## Documentation & Showcase
+---
 
-- **Design System Showcase:** Navigate to `/design-system` in development to interactively inspect design tokens, typography, UI primitives, and representative components.
-- [PRODUCT.md](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/PRODUCT.md) — Product thesis, principles, MVP scope, and stretch goals.
-- [ARCHITECTURE.md](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/ARCHITECTURE.md) — System boundaries, data flow, checkpoint concept, and trade-offs.
-- [DESIGN.md](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/DESIGN.md) — Visual design tokens, Deep Rose / Ink palette, typography hierarchy, and UI component specifications.
+## Application Routes & User Experience (Phase 6)
+
+| Route | View | Description |
+| :--- | :--- | :--- |
+| `/` | **Overview (Primary)** | Answers *"What changed while I was away?"* Displays ranked `ChangeInsight` feed, `QuietState` reassurance, and baseline `[Refresh]` vs `[Checkpoint]` actions. |
+| `/watchlist` | **Watchlist Management** | Interactive Indian equity tracker with instant symbol search, exchange selector (NSE/BSE), duplicate guards, and removal controls. |
+| `/watchlist/[symbol]` | **Instrument Detail** | Deep analytical breakdown featuring 20-day SVG trajectory charts, baseline reference markers, NIFTY 50 divergence, volume/volatility ratios, and factual reasons. |
+| `/history` | **Checkpoint Ledger** | Chronological audit trail of all saved user memory baselines and granular snapshot data. |
+| `/settings` | **Settings & Session** | User session information, RLS verification, active market data feed parameters, and sign-out. |
+| `/login` | **Authentication** | Restrained Deep Rose / Ink authentication portal with sign-in and account creation tabs. |
+| `/design-system` | **Design Showcase** | Interactive living catalog of design tokens, typography, primitives, and domain components. |
+
+---
+
+## Documentation & Architecture
+
+- [PRODUCT.md](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/PRODUCT.md) — Product thesis, 10 design principles, target user, 14 UX states, and acceptance criteria.
+- [ARCHITECTURE.md](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/ARCHITECTURE.md) — Modular monolith architecture, PostgreSQL RLS schema, market provider abstraction, and deterministic scoring models.
+- [DESIGN.md](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/DESIGN.md) — Deep Rose / Ink visual design system, typography hierarchy, component specifications, and states.

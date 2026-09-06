@@ -1,15 +1,15 @@
 import { getOverviewDataAction } from "@/app/actions/trace";
 import { AppShell } from "@/components/trace/AppShell";
-import { OverviewContainer } from "@/components/trace/OverviewContainer";
+import { WatchlistContainer } from "@/components/trace/WatchlistContainer";
 
 export const dynamic = "force-dynamic";
 
-export default async function OverviewPage() {
+export default async function WatchlistPage() {
   const initialData = await getOverviewDataAction();
 
   return (
     <AppShell>
-      <OverviewContainer initialData={initialData} />
+      <WatchlistContainer initialData={initialData} />
     </AppShell>
   );
 }
