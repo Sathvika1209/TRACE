@@ -1,108 +1,171 @@
-# TRACE — Design System Specification
+# TRACE — Visual Design System Specification
+
+> **Working Tagline:** "Know what changed. Know what matters."  
+> **Challenge:** Code, by Groww 2026 Engineering Challenge  
+> **Status:** Authoritative Visual Design System (Phase 3)
 
 ---
 
-## 1. Intended Visual Direction
+## 1. Visual Philosophy & Core Identity
 
-TRACE is designed with a **premium, restrained fintech aesthetic**:
+TRACE is designed as a **dark-first, premium analytical fintech tool**:
 
-- **Analytical & Precise:** Numbers, tickers, and deltas take center stage with high typographical hierarchy.
-- **Calm & Focused:** Low visual noise, neutral backgrounds, and deliberate use of color accents only for meaningful data changes.
-- **Trustworthy & Modern:** Clear boundaries, subtle hairline borders, and crisp alignment inspire confidence in financial data.
-- **Balanced Density:** High information density in data tables and change feeds, paired with disciplined breathing room around key actions.
-- **Feed-First Hierarchy:** The primary dashboard is dominated by the meaningful change feed ("Your TRACE"), while the raw watchlist table is secondary.
-
----
-
-## 2. Design Principles & Anti-Patterns
-
-### Core Principles
-1. **Information over Decoration:** Every visual element must serve comprehension. If an element does not convey market state or change context, remove it.
-2. **Deterministic Feedback:** Visual indicators must reflect exact mathematical states (e.g., green/red for positive/negative delta, amber for stale data).
-3. **Restrained Motion:** Animations are limited to functional micro-transitions (tab switches, loading state transitions). Zero distracting motion.
-4. **Quiet as a State:** A session with no abnormal market divergence is a successful, calm state—not an empty or error state.
-
-### Explicit Anti-Patterns (What We Avoid)
-- **NO Purple AI Gradients:** Avoid trendy purple-indigo gradients and "AI sparkle" branding.
-- **NO Excessive Glassmorphism:** Avoid heavy backdrop blurs, floating glass cards, and high-opacity frosted glass layers.
-- **NO Giant Rounded Cards:** Avoid overly bubbly border-radius (e.g. `rounded-3xl` everywhere) that wastes space.
-- **NO Excessive Shadows:** Favor subtle 1px border lines over floating drop shadows.
-- **NO Fake AI Widgets:** No generative "AI chat bubbles" masquerading as market analysis.
+- **Editorial & Analytical:** Information presented with high typographical discipline, akin to an institutional research terminal rather than a generic SaaS template.
+- **Calm & Precise:** Neutral dark surfaces, hairline borders, and deliberate use of color accents strictly when market movements demand attention.
+- **Signal-First Hierarchy:** The primary view is dominated by the meaningful change feed (**"Your TRACE"**); raw watchlist tables are secondary.
+- **Trustworthy & Explainable:** Distinguishes observable market facts from derived interpretations; never presents speculative causal claims.
+- **Quiet State as a Success State:** A return visit with no abnormal volatility is celebrated as a calm, reassuring confirmation—not an empty or error state.
 
 ---
 
-## 3. Typography Direction (Placeholder)
+## 2. Color Palette & Token Architecture
 
-> *Note: Final font selections will be validated in a dedicated design phase. The current configuration uses clean, neutral system/modern sans and monospace fonts.*
+### 2.1 Brand Foundation: Deep Rose / Ink
 
-- **Body & Headings:** Neutral, high-legibility geometric or humanist sans-serif (e.g. Geist, Inter, or system sans-serif).
-- **Tabular & Financial Data:** Monospace or tabular figures (`font-mono` / `tabular-nums`) for prices, percentages, volumes, and timestamps to ensure vertical column alignment across changing figures.
-- **Scale:**
-  - Display / Hero numbers: `text-2xl` to `text-3xl` (semi-bold)
-  - Section headers: `text-base` to `text-lg` (medium)
-  - Data labels & body: `text-sm` (regular / medium)
-  - Metadata & timestamps: `text-xs` (neutral muted)
+The TRACE brand identity is built upon an ink canvas paired with restrained deep rose accents.
 
----
-
-## 4. Color System Philosophy & Placeholders
-
-> *Note: Final color palette tokens will be generated and refined deliberately using Realtime Colors in Phase 3. No final colors are locked in this phase.*
-
-### Token Taxonomy (Semantic Variables)
-
-| Token Role | Semantic Purpose | Placeholder Base |
-| :--- | :--- | :--- |
-| `background` | Canvas foundation | Pure/off-neutral (`#ffffff` light / `#0a0a0a` dark) |
-| `foreground` | Primary text and headings | High-contrast neutral (`#171717` light / `#ededed` dark) |
-| `muted` / `subtle` | Secondary labels, timestamps, icons | Mid-tone neutral (`#737373` / `#a3a3a3`) |
-| `border` / `hairline` | Subtle dividers and card outlines | Hairline neutral (`#e5e5e5` light / `#262626` dark) |
-| `positive` (Gain) | Indicates upward price movement | Clean, restrained green (non-neon) |
-| `negative` (Loss) | Indicates downward price movement | Clean, restrained red/rose (non-neon) |
-| `warning` / `stale` | Stale data, delayed quotes, or warning state | Restrained amber/warm gold |
-| `accent` | Selected states, primary focus ring | Controlled monochrome or neutral accent |
+| Token | CSS Variable | Hex / Value (Dark) | Semantic Purpose |
+| :--- | :--- | :--- | :--- |
+| `background` | `--background` | `#0e0c0d` | Deep ink canvas foundation. |
+| `background-elevated` | `--background-elevated`| `#151213` | Elevated navigation and header panels. |
+| `surface` | `--surface` | `#1b1719` | Primary card and row container surface. |
+| `surface-hover` | `--surface-hover` | `#241f22` | Interactive element hover state. |
+| `surface-active` | `--surface-active` | `#2f282c` | Interactive active/pressed state. |
+| `border` | `--border` | `#2c2528` | Hairline divider and component boundary. |
+| `border-subtle` | `--border-subtle` | `#1f1a1c` | Internal card dividers and subtle rules. |
+| `text-primary` | `--text-primary` | `#f6f3f4` | High-contrast body, tickers, and prices. |
+| `text-secondary` | `--text-secondary` | `#b0a3a7` | Subheadings, descriptions, and labels. |
+| `text-muted` | `--text-muted` | `#786c71` | Timestamps, metadata, and inactive tags. |
+| `brand-primary` | `--brand-primary` | `#9e5560` | Primary brand deep rose. |
+| `brand-secondary` | `--brand-secondary` | `#c9a0a4` | Accent labels and subtle highlights. |
+| `brand-accent` | `--brand-accent` | `#c46c77` | Focus rings and active navigation badges. |
+| `brand-surface` | `--brand-surface` | `rgba(158,85,96,0.14)` | Subdued tinted badge backgrounds. |
 
 ---
 
-## 5. Spacing & Layout Principles
+### 2.2 Semantic Market & Operational Colors (Separated from Brand)
 
-- **Grid & Alignment:** Consistent 4px / 8px grid system (`gap-2`, `gap-4`, `gap-6`, `p-4`, `p-6`).
-- **Compact Data Rows:** Vertical padding in list items and tables kept lean (`py-2.5` to `py-3`) for optimal scan speed.
-- **Clear Scannability:** Group related data hierarchically: `[Symbol + Name] -> [Current Price + Checkpoint Delta] -> [Significance Badge + Reasons]`.
+> **Critical Rule:** Brand colors and semantic market colors **MUST** remain separate. Upward price movement never uses brand rose; downward movement never uses brand rose.
 
----
-
-## 6. Component Philosophy
-
-- **Foundation:** Built on top of `shadcn/ui` primitives (Radix UI headless components + Tailwind CSS).
-- **Small & Composable:** Complex views (e.g., Change Feed) are assembled from single-purpose, pure presentational components.
-- **Separation of Concerns:** Components receive typed props and emit events; zero direct database queries or mathematical engine algorithms inside components.
-
----
-
-## 7. Interaction Philosophy
-
-- **Immediate Clarity:** On loading TRACE, the user's eye lands directly on "Since your last check" hero metrics and the top 3 most significant changes.
-- **Progressive Disclosure:** High-level summary badges and structured reasons are visible upfront; deep historical drill-downs and quote breakdowns are revealed on click/expansion.
-- **Explicit Checkpoint Status:** A prominent, understated status badge communicates baseline checkpoint time (e.g., *"Comparing against today, 10:15 AM"*).
+| Semantic Role | CSS Variable | Color Value | Usage Guidelines |
+| :--- | :--- | :--- | :--- |
+| **Market Gain (Positive)** | `--positive` | `#22c55e` | Upward price delta, benchmark outperformance, positive alpha. |
+| **Market Loss (Negative)** | `--negative` | `#f43f5e` | Downward price delta, benchmark underperformance, negative alpha. |
+| **Warning / Attention** | `--warning` | `#f59e0b` | High-volatility alerts, provider latency, non-blocking warnings. |
+| **Stale / Delayed** | `--stale` | `#d97706` | Data exceeding refresh threshold or 15m exchange delay tag. |
+| **Error / Interruption** | `--error` | `#ef4444` | Upstream provider disconnects, failed symbol queries. |
+| **Informational** | `--info` | `#60a5fa` | Neutral metadata tags, system notifications. |
 
 ---
 
-## 8. UX State Matrix (14 Core Operational States)
+## 3. Typography Hierarchy & Financial Numerals
 
-The design system must explicitly accommodate all 14 product states defined in [`PRODUCT.md`](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/PRODUCT.md):
+### 3.1 Typeface: Geist Sans & Monospace
+- **Primary Font:** Geist Sans (`--font-sans`) for clean legibility across interface labels, headings, and narratives.
+- **Quantitative / Monospace Font:** Geist Mono (`--font-mono` / `tabular-nums`) for prices, percentages, volumes, timestamps, and ticker symbols.
 
-1. **First-Time User:** Clean onboarding card prompting user to add initial instruments to begin baseline memory.
-2. **Returning User (With Changes):** Ranked feed of Notable / Significant / Major cards with multi-signal evidence.
-3. **Returning User (Quiet State):** Calm, reassuring confirmation: *"Nothing significant changed since your last check (10:15 AM)."* (Valid non-error state).
-4. **Market Open:** Green badge: `Market Open (IST)` with live baseline comparisons.
-5. **Market Closed:** Neutral badge: `Market Closed` comparing against market-close snapshot.
-6. **Delayed Data:** Informative badge: `Delayed (~15m)` ensuring data transparency.
-7. **Stale Data:** Amber badge: `Data Stale (Updated 24m ago)`.
-8. **Provider Failure:** Graceful warning banner with fallback to last known snapshot.
-9. **Empty Watchlist:** Helpful empty card with search and benchmark suggestions.
-10. **Failed Watchlist Operation:** Non-destructive toast notification with retry button.
-11. **Partial Data Availability:** Visual distinction for loaded quotes vs unavailable items without page disruption.
-12. **Instrument Unavailable:** Muted status badge: `Trading Halted / Delisted`.
-13. **No Previous Checkpoint:** Informative banner: *"Initial baseline captured. Return later to inspect changes."*
-14. **Very Large Watchlist:** Virtualized scroll with tier filter pills (`All`, `Major`, `Significant`, `Notable`).
+### 3.2 Scale & Hierarchy
+
+| Role | Class / Size | Weight | Font Family | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| **Page Title** | `text-xl` to `text-2xl` | Bold (700) | Geist Sans / Mono | `Your TRACE` |
+| **Section Heading** | `text-sm` to `text-base` | Semi-bold (600) | Geist Sans | `Meaningful Changes` |
+| **Instrument Symbol** | `text-sm` to `text-lg` | Bold (700) | Geist Mono | `TATAMOTORS` |
+| **Large Price** | `text-lg` to `text-xl` | Semi-bold (600) | Geist Mono (Tabular) | `₹1,042.50` |
+| **Percentage Delta** | `text-xs` to `text-sm` | Semi-bold (600) | Geist Mono (Tabular) | `+4.85% (+48.20)` |
+| **Body / Explanations** | `text-xs` to `text-sm` | Regular (400) | Geist Sans | *"Volume is 3.1x typical..."* |
+| **Metadata & Badges** | `text-[10px]` to `text-xs` | Medium (500) | Geist Mono / Sans | `Since 10:15 AM · Live` |
+
+---
+
+## 4. Spacing, Borders & Radius Scale
+
+### 4.1 Restrained Spacing Scale
+Consistent 4px / 8px incremental scale:
+`4px` (`gap-1`), `8px` (`gap-2`), `12px` (`gap-3`), `16px` (`gap-4`), `24px` (`gap-6`), `32px` (`gap-8`), `48px` (`gap-12`), `64px` (`gap-16`).
+
+### 4.2 Restrained Radius Scale
+- `4px` (`rounded-[4px]`): Buttons, inputs, badges, status pills, table rows.
+- `6px` (`rounded-[6px]`): Card containers, modal sheets, drawer panels.
+- `12px` (`rounded-[12px]`): Maximum boundary radius for full-page dialogs.
+- *(Overly rounded bubbly containers like `rounded-3xl` are strictly prohibited).*
+
+### 4.3 Hairline Borders over Heavy Shadows
+TRACE relies on 1px subtle hairline borders (`border-border` / `border-border-subtle`) for visual structure rather than diffuse drop shadows. Shadows are limited to micro-elevation on hovered cards.
+
+---
+
+## 5. Core Component Architecture
+
+The design system provides reusable components in `components/trace/` and `components/ui/`:
+
+### 5.1 Flagship Component: `ChangeInsight`
+The core component of the TRACE experience. It encapsulates:
+1. **Significance Tier Indicator:** `NORMAL`, `NOTABLE`, `SIGNIFICANT`, or `MAJOR`.
+2. **Instrument Identifier:** Uppercase mono symbol + official company name.
+3. **Current Price & Checkpoint Delta:** Price with positive/negative color coding and absolute delta.
+4. **Contextual Signal Pills:** Divergence against NIFTY 50 and volume anomaly multiplier.
+5. **Structured Reasons List:** Bulleted factual observations explaining why TRACE flagged the movement.
+6. **Time Context & Freshness:** Checkpoint time delta and live/delayed status.
+7. **Action CTA:** Secondary "View Details →" button for drill-down.
+
+### 5.2 Watchlist Row: `InstrumentRow`
+Compact list row with symbol, name, LTP, checkpoint delta, subtle mini sparkline placeholder, and status tag.
+
+### 5.3 Status & Freshness: `FreshnessStatus`
+Communicates data trust across `FRESH`, `DELAYED`, `STALE`, and `UNAVAILABLE` using **text labels + icons + color dots** (never color alone).
+
+### 5.4 Significance Indicator: `SignificanceIndicator`
+Standardized badges for `NORMAL`, `NOTABLE`, `SIGNIFICANT`, and `MAJOR` tiers with optional normalized score display.
+
+### 5.5 Structured Evidence: `EvidenceRow`
+Modular two-column metric row for price delta, volume ratio, volatility expansion, and elapsed time.
+
+### 5.6 Quiet State: `QuietState`
+Understated, reassuring card confirming that all watchlist instruments are behaving normally within expected volatility bands.
+
+### 5.7 Financial Skeletons: `LoadingState`
+Calm shimmer skeletons mirroring exact layout geometry without intrusive full-page spinners.
+
+### 5.8 Graceful Degraded States: `ErrorState`
+Restrained alert cards explaining provider disconnects or data staleness with retry actions and last known snapshot timestamps.
+
+### 5.9 App Shell & Navigation: `AppShell`, `Sidebar`, `MobileNav`
+Restrained desktop sidebar navigation paired with responsive mobile header drawer and compact bottom bar.
+
+---
+
+## 6. Responsive Principles
+
+- **Desktop (>= 1024px):** Fixed left sidebar (`w-64`), multi-column change feed, side-by-side metric evidence breakdown.
+- **Tablet (768px – 1023px):** Compact sidebar (`w-56`), stacked change insight layout, full-width watchlist tables.
+- **Mobile (< 768px):** Sticky top header with brand logo, slide-out navigation drawer, compact bottom navigation bar, single-column change feed with touch-friendly 44px hit targets.
+
+---
+
+## 7. Accessibility & Inclusive Design
+
+- **Color Contrast:** All text tokens meet WCAG AA contrast standards ($\ge 4.5:1$ for body, $\ge 3:1$ for large headings).
+- **Multi-Modal Status:** Freshness and market movements are conveyed through text + icons + color (never color alone).
+- **Keyboard Navigation:** Explicit visible focus rings (`focus-visible:ring-1 focus-visible:ring-brand-accent`).
+- **Motion Reduction:** All transitions respect `prefers-reduced-motion: reduce`.
+
+---
+
+## 8. Chart & Data Visualization Rules (For Future Implementation)
+
+1. **Information over Decoration:** Charts must convey price trajectory and baseline checkpoints, not ornamental background fill.
+2. **Minimal Gridlines:** Faint horizontal price rules only; no vertical grid noise.
+3. **Benchmark Overlay:** Reference index (NIFTY 50) rendered as a subtle dashed neutral line.
+4. **Zero Pseudo-3D or Neon Glow:** Crisp 1.5px vector strokes with subtle area opacity ($\le 10\%$).
+
+---
+
+## 9. Explicit Anti-Patterns (What TRACE Avoids)
+
+- ❌ No purple AI gradients or glowing neon buttons.
+- ❌ No floating frosted glassmorphism cards.
+- ❌ No giant rounded `rounded-3xl` cards with empty whitespace.
+- ❌ No "AI Insights ✨" generative sparkle branding.
+- ❌ No generic card grids where every stock looks identical.
+- ❌ No fake charts or decorative stock photos.

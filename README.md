@@ -112,8 +112,9 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to view th
 
 ---
 
-## Documentation
+## Documentation & Showcase
 
+- **Design System Showcase:** Navigate to `/design-system` in development to interactively inspect design tokens, typography, UI primitives, and representative components.
 - [PRODUCT.md](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/PRODUCT.md) — Product thesis, principles, MVP scope, and stretch goals.
 - [ARCHITECTURE.md](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/ARCHITECTURE.md) — System boundaries, data flow, checkpoint concept, and trade-offs.
-- [DESIGN.md](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/DESIGN.md) — Visual principles, typography direction, color system tokens, and UI states.
+- [DESIGN.md](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/DESIGN.md) — Visual design tokens, Deep Rose / Ink palette, typography hierarchy, and UI component specifications.
