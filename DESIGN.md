@@ -10,6 +10,7 @@ TRACE is designed with a **premium, restrained fintech aesthetic**:
 - **Calm & Focused:** Low visual noise, neutral backgrounds, and deliberate use of color accents only for meaningful data changes.
 - **Trustworthy & Modern:** Clear boundaries, subtle hairline borders, and crisp alignment inspire confidence in financial data.
 - **Balanced Density:** High information density in data tables and change feeds, paired with disciplined breathing room around key actions.
+- **Feed-First Hierarchy:** The primary dashboard is dominated by the meaningful change feed ("Your TRACE"), while the raw watchlist table is secondary.
 
 ---
 
@@ -19,6 +20,7 @@ TRACE is designed with a **premium, restrained fintech aesthetic**:
 1. **Information over Decoration:** Every visual element must serve comprehension. If an element does not convey market state or change context, remove it.
 2. **Deterministic Feedback:** Visual indicators must reflect exact mathematical states (e.g., green/red for positive/negative delta, amber for stale data).
 3. **Restrained Motion:** Animations are limited to functional micro-transitions (tab switches, loading state transitions). Zero distracting motion.
+4. **Quiet as a State:** A session with no abnormal market divergence is a successful, calm state—not an empty or error state.
 
 ### Explicit Anti-Patterns (What We Avoid)
 - **NO Purple AI Gradients:** Avoid trendy purple-indigo gradients and "AI sparkle" branding.
@@ -45,7 +47,7 @@ TRACE is designed with a **premium, restrained fintech aesthetic**:
 
 ## 4. Color System Philosophy & Placeholders
 
-> *Note: Final color palette tokens will be generated and refined deliberately using Realtime Colors in the subsequent design phase. No final colors are locked in Phase 1.*
+> *Note: Final color palette tokens will be generated and refined deliberately using Realtime Colors in Phase 3. No final colors are locked in this phase.*
 
 ### Token Taxonomy (Semantic Variables)
 
@@ -80,19 +82,27 @@ TRACE is designed with a **premium, restrained fintech aesthetic**:
 
 ## 7. Interaction Philosophy
 
-- **Immediate Clarity:** On loading TRACE, the user's eye should immediately land on the top 3 most significant changes since their previous checkpoint.
+- **Immediate Clarity:** On loading TRACE, the user's eye lands directly on "Since your last check" hero metrics and the top 3 most significant changes.
 - **Progressive Disclosure:** High-level summary badges and structured reasons are visible upfront; deep historical drill-downs and quote breakdowns are revealed on click/expansion.
 - **Explicit Checkpoint Status:** A prominent, understated status badge communicates baseline checkpoint time (e.g., *"Comparing against today, 10:15 AM"*).
 
 ---
 
-## 8. Required UI States (For Phase 2 Implementation)
+## 8. UX State Matrix (14 Core Operational States)
 
-The design system must explicitly cater to these states:
+The design system must explicitly accommodate all 14 product states defined in [`PRODUCT.md`](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/PRODUCT.md):
 
-1. **Active / Fresh State:** Live or fresh market quotes with clear checkpoint comparisons.
-2. **Stale / Delayed Data State:** Clear visual indicator when market data provider has not updated within threshold or during market closure.
-3. **Empty Watchlist State:** Actionable onboarding prompt encouraging user to add their first instruments.
-4. **No Significant Changes State:** Reassuring, calm message when watchlist movements fall below significance thresholds (e.g., *"No unusual divergence detected since 11:30 AM"*).
-5. **Loading & Skeleton State:** Precise structural skeletons mirroring exact table/feed layout without layout shifts.
-6. **Error / Degraded State:** Non-intrusive warning banners explaining API connectivity issues with fallback to last known snapshot.
+1. **First-Time User:** Clean onboarding card prompting user to add initial instruments to begin baseline memory.
+2. **Returning User (With Changes):** Ranked feed of Notable / Significant / Major cards with multi-signal evidence.
+3. **Returning User (Quiet State):** Calm, reassuring confirmation: *"Nothing significant changed since your last check (10:15 AM)."* (Valid non-error state).
+4. **Market Open:** Green badge: `Market Open (IST)` with live baseline comparisons.
+5. **Market Closed:** Neutral badge: `Market Closed` comparing against market-close snapshot.
+6. **Delayed Data:** Informative badge: `Delayed (~15m)` ensuring data transparency.
+7. **Stale Data:** Amber badge: `Data Stale (Updated 24m ago)`.
+8. **Provider Failure:** Graceful warning banner with fallback to last known snapshot.
+9. **Empty Watchlist:** Helpful empty card with search and benchmark suggestions.
+10. **Failed Watchlist Operation:** Non-destructive toast notification with retry button.
+11. **Partial Data Availability:** Visual distinction for loaded quotes vs unavailable items without page disruption.
+12. **Instrument Unavailable:** Muted status badge: `Trading Halted / Delisted`.
+13. **No Previous Checkpoint:** Informative banner: *"Initial baseline captured. Return later to inspect changes."*
+14. **Very Large Watchlist:** Virtualized scroll with tier filter pills (`All`, `Major`, `Significant`, `Notable`).

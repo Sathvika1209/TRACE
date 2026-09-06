@@ -54,9 +54,9 @@ TRACE is structured as a **modular monolith** within Next.js. Business logic is 
                     ▼                                             ▼
        ┌─────────────────────────┐                   ┌────────────────────────┐
        │ Supabase (PostgreSQL)   │                   │ External Market Data   │
-       │  • User Watchlists      │                   │  • Real-time Quotes    │
-       │  • Checkpoints & State  │                   │  • Index Baselines     │
-       │  • Snapshots            │                   │  • Volume & Hist. Data │
+       │  • User Watchlists      │                   │  • Indian Equities     │
+       │  • Checkpoints & State  │                   │  • NIFTY 50 Benchmark  │
+       │  • Snapshots            │                   │  • Volume & Volatility │
        │  • RLS Access Control   │                   └────────────────────────┘
        └─────────────────────────┘
 ```
@@ -106,62 +106,69 @@ trace/
 
 ---
 
-## 5. Data Flow & Checkpoint Concept
+## 5. Data Flow & Checkpoint Memory Concept
 
 ### Step-by-Step Data Flow
 
 ```text
 1. User Session Initialization:
-   User logs in / visits -> Server retrieves latest Watchlist + most recent Checkpoint.
+   User logs in / visits -> Server retrieves latest Watchlist + most recent Checkpoint baseline.
 
 2. Market Data Retrieval:
-   Market Data Service fetches current quotes for all symbols in the watchlist.
+   Market Data Service fetches current quotes for all symbols in the watchlist plus the NIFTY 50 benchmark.
 
 3. Meaningful Change Evaluation:
    Change Engine receives:
      - Baseline Checkpoint State (quotes at timestamp T0)
      - Current Market State (quotes at timestamp T1)
-     - Benchmark Index State (at T0 and T1)
+     - Benchmark Index State (NIFTY 50 at T0 and T1)
 
 4. Deterministic Scoring & Structured Evidence Output:
-   Change Engine evaluates mathematical signals and produces structured evidence:
+   Change Engine evaluates mathematical signals (price movement, volume ratio, NIFTY divergence)
+   and produces structured evidence:
    {
      symbol: "TATAMOTORS",
-     price_change: 3.42,
-     volume_ratio: 2.15,
-     relative_market_performance: 3.82,
-     significance_score: 0.89,
+     price_change: 4.85,
+     volume_ratio: 2.80,
+     relative_market_performance: 3.95,
+     significance_score: 78,
      reasons: [...]
    }
 
-5. Checkpoint Baseline Recording:
+5. Checkpoint Memory & Baseline Update:
    Server records a new checkpoint baseline (or updates last-seen checkpoint according to cadence policy).
+   The system retains memory of what was shown to prevent redundant alert fatigue.
 
 6. Presentation:
-   UI renders the ranked change feed with data freshness indicators and structured reasons.
+   UI renders the ranked change feed ("Your TRACE") with data freshness indicators and structured reasons.
+   If no changes meet threshold, a quiet valid state is displayed.
 ```
 
 ---
 
 ## 6. Change Engine Boundary & Explainability Model
 
-The **Meaningful Change Engine** is decoupled into two distinct phases:
+The **Meaningful Change Engine** is decoupled into two distinct layers:
 
 1. **Deterministic Computation (Core, Mandatory):**
    - Pure, explainable mathematical calculations.
-   - Calculates absolute price delta, deviation from average volume, divergence from market index, and volatility shifts.
-   - Computes a normalized `significance_score` (0.0 to 1.0) and assigns structured reasons (`ChangeReason[]`).
-2. **Narrative Generation (Optional Future Layer):**
-   - Takes the output `StructuredChangeEvidence` and translates it into concise human-readable prose (either via template strings or an external LLM like Groq).
-   - **Constraint:** The LLM is strictly a formatter/summarizer; it has zero authority to decide if a change happened or determine ranking.
+   - Evaluates price delta, volume anomaly relative to baseline, divergence against NIFTY 50 benchmark, and volatility shifts.
+   - Computes a normalized `significance_score` (0–100) mapped to provisional tiers (`Normal`, `Notable`, `Significant`, `Major`) and structured reasons (`ChangeReason[]`).
+2. **Narrative Formatting (Optional Downstream Layer):**
+   - Takes the output `StructuredChangeEvidence` and formats it into concise prose (via deterministic templates by default, or an optional external LLM like Groq).
+   - **Hard Rule:** The LLM is strictly a formatter/summarizer; it has zero authority to decide if a change happened, calculate metrics, or determine ranking.
 
 ---
 
-## 7. Reliability, Freshness & Failure Modes
+## 7. Reliability, Data Freshness & UX State Handling
 
-- **Data Staleness Transparency:** Every market quote and checkpoint delta carries ISO timestamps. The UI marks quotes as `stale` if elapsed time exceeds the provider's refresh threshold.
-- **Provider Resilience:** The `IMarketDataService` interface allows swapping or wrapping market data providers (with in-memory/cache fallback) without modifying downstream watchlist or change engine code.
-- **Graceful Degradation:** If external market APIs fail, the application continues to display the latest saved snapshot with clear degradation warnings rather than crashing.
+- **Data Trust Taxonomy:** Every market quote and checkpoint delta is classified into one of four states:
+  - `FRESH`: Quote timestamp is within current market threshold.
+  - `DELAYED`: Upstream exchange feed is standard 15m delayed.
+  - `STALE`: Quote timestamp exceeds threshold; amber warning badge rendered.
+  - `UNAVAILABLE`: Upstream provider unreachable or instrument halted; fallback to last snapshot.
+- **Provider Resilience:** The `IMarketDataService` interface isolates external API specifics, enabling caching, failover, or mock simulation for testing.
+- **Quiet State Support:** A return visit with no abnormal movements is handled as a first-class, valid state rather than an error or empty state.
 
 ---
 
@@ -171,5 +178,5 @@ The **Meaningful Change Engine** is decoupled into two distinct phases:
 | :--- | :--- | :--- | :--- | :--- |
 | **Backend Architecture** | Modular Monolith (Next.js App Router + Server Actions) | Microservices (Next.js + separate FastAPI service) | **Modular Monolith** | Avoids multi-service deployment complexity and latency while keeping module boundaries strictly isolated. |
 | **State Snapshot Storage** | PostgreSQL JSONB column per checkpoint | Normalized relational rows per instrument | **To be finalized in DB design phase** | JSONB offers snapshot immutability and fast single-record fetch; relational allows SQL-level aggregations. |
-| **Realtime Subscriptions** | Polling / SWR on user focus | Supabase Realtime / WebSockets | **Polling / On-Demand for MVP** | Realtime WebSockets add connection overhead and cost; checkpoints naturally fit discrete visit/focus intervals. |
-| **Market Data Caching** | Next.js `unstable_cache` / Redis | Direct database snapshot cache | **To be finalized with provider** | In-memory cache reduces API consumption; DB snapshot provides persistent audit history. |
+| **Market Data Refresh** | Window focus + manual refresh | Realtime WebSockets / SSE | **Window focus + on-demand for MVP** | Conserves API quotas and aligns with discrete checkpoint return journey; WebSockets deferred to stretch. |
+| **LLM Explanation Provider** | Groq (Llama 3 inference) | Local / Self-hosted model | **Groq (Deferred to stretch)** | Fast, low-latency API without heavy infrastructure overhead; product works 100% without it. |
