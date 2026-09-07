@@ -69,8 +69,12 @@ export class CheckpointService implements ICheckpointService {
     );
 
     if (rpcError) {
-      // Fallback: If RPC is not present in local test environment, perform sequential atomic verification
-      if (rpcError.message.includes("function") && rpcError.message.includes("does not exist")) {
+      // Fallback: If RPC is not present or schema cache not reloaded in Supabase, perform robust transactional insert
+      if (
+        (rpcError.message.includes("function") && rpcError.message.includes("does not exist")) ||
+        rpcError.message.includes("schema cache") ||
+        rpcError.code === "PGRST202"
+      ) {
         return await this.createCheckpointManualFallback(input, snapshotsPayload);
       }
       throw new Error(`Failed to create checkpoint atomically: ${rpcError.message}`);
