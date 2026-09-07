@@ -115,7 +115,43 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to view th
 
 ---
 
-## Application Routes & User Experience (Phase 6)
+## Challenge Submission Material (Code, by Groww 2026)
+
+### A. One-Sentence Description
+**TRACE** is a deterministic smart market watchlist that answers *"What changed while I was away?"* by comparing live market telemetry against discrete user checkpoints across price, volume, benchmark divergence, and volatility.
+
+### B. 100-Word Pitch
+Investors waste valuable focus repeatedly rescanning unchanged watchlists without knowing what actually moved. TRACE introduces an explicit memory baseline: each time you check your watchlist, a discrete checkpoint is recorded. When you return, TRACE deterministically evaluates current market telemetry against that checkpoint—computing price deltas, 20-day volume ratios, NIFTY 50 relative alpha, and volatility expansions. Rather than spewing probabilistic AI hallucinations, TRACE surfaces ranked, evidence-backed changes categorized into four canonical tiers: Normal, Notable, Significant, and Major. If nothing meaningfully shifted, TRACE delivers an immediate Quiet State reassurance, empowering investors to acknowledge changes and advance their baseline with absolute trust.
+
+### C. Key Engineering Decisions
+1. **Zero-LLM Deterministic Intelligence:** Core change detection and scoring (0–100) are purely mathematical and explainable, ensuring zero hallucinations, bit-level test reproducibility, and sub-millisecond evaluation latency.
+2. **Explicit Memory Model (Refresh vs Checkpoint):** `[Refresh]` updates live quotes against the *existing* baseline without mutating state; `[Checkpoint]` advances the user's baseline atomically via PostgreSQL stored procedures.
+3. **Graceful Error Isolation & Non-Fabrication:** Missing or halted quotes remain strictly `NULL` (never silently converted to `0.00`). Partial batch failures isolate at the instrument level without failing the watchlist.
+4. **Dark-First Design System:** Deep Rose / Ink visual hierarchy designed to avoid sensationalist colors, presenting quiet states as positive reassurance rather than empty screens.
+5. **Row-Level Security Architecture:** Strict PostgreSQL RLS ownership paths (`auth.users` → `profiles` → `watchlists` → `watchlist_instruments` → `checkpoints` → `checkpoint_snapshots`).
+
+### D. Why TRACE is Different
+| Standard Market Watchlist | TRACE Smart Watchlist |
+| :--- | :--- |
+| Shows raw intraday % change from previous close | Compares against **when YOU last checked** (User Checkpoint) |
+| Flashes colors and noise on routine 0.2% ticks | Filters noise and surfaces a **Quiet State** when nothing is notable |
+| Evaluates symbols in isolation | Measures **Benchmark Alpha vs NIFTY 50** and volume anomaly ratios |
+| Black-box or noisy AI text generation | **Deterministic, explainable evidence** with exact mathematical reasons |
+
+### E. Canonical Significance Tiers
+- **0–29 (NORMAL):** Routine market fluctuation within expected historical variance.
+- **30–59 (NOTABLE):** Noticeable price movement or minor benchmark divergence.
+- **60–79 (SIGNIFICANT):** Major price swing, 2x+ volume expansion, or strong benchmark decoupling.
+- **80–100 (MAJOR):** Extreme outlier move combining multi-sigma price action, volume breakout, and market divergence.
+
+### F. Known Limitations
+- **Indian Equities Scope (MVP):** Supports NSE/BSE equities and NIFTY 50 benchmark; derivatives and global indices are not currently ingested.
+- **Market Delay:** Default free Yahoo Finance feed operates with a ~15-minute delay for Indian equities during live market hours.
+- **Single Benchmark:** Relative performance is currently benchmarked exclusively against NIFTY 50 (`^NSEI`).
+
+---
+
+## Application Routes & User Experience
 
 | Route | View | Description |
 | :--- | :--- | :--- |
@@ -125,7 +161,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to view th
 | `/history` | **Checkpoint Ledger** | Chronological audit trail of all saved user memory baselines and granular snapshot data. |
 | `/settings` | **Settings & Session** | User session information, RLS verification, active market data feed parameters, and sign-out. |
 | `/login` | **Authentication** | Restrained Deep Rose / Ink authentication portal with sign-in and account creation tabs. |
-| `/design-system` | **Design Showcase** | Interactive living catalog of design tokens, typography, primitives, and domain components. |
+| `/design-system` | **Design Showcase** | Interactive living catalog of design tokens, typography, primitives, and domain components (Internal/Preview). |
 
 ---
 
@@ -134,3 +170,4 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to view th
 - [PRODUCT.md](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/PRODUCT.md) — Product thesis, 10 design principles, target user, 14 UX states, and acceptance criteria.
 - [ARCHITECTURE.md](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/ARCHITECTURE.md) — Modular monolith architecture, PostgreSQL RLS schema, market provider abstraction, and deterministic scoring models.
 - [DESIGN.md](file:///c:/Users/Sathvika/Documents/antigravity/modest-hertz/DESIGN.md) — Deep Rose / Ink visual design system, typography hierarchy, component specifications, and states.
+
