@@ -109,20 +109,37 @@ describe("TRACE Resilience, Reliability & Error Isolation (Phase 7)", () => {
       assert.equal(halted.evidence.significanceScore, 0);
     });
 
-    test("MarketDataService gracefully falls back to secondary provider on primary crash", async () => {
+    test("MarketDataService in live mode does NOT fallback to mock data on provider outage, returning UNAVAILABLE", async () => {
       const primaryFaulty = new FaultyMarketDataProvider();
       primaryFaulty.simulateNetworkCrash = true;
 
-      const secondaryMock = new MockMarketDataProvider();
-      const service = new MarketDataService(primaryFaulty, {
-        fallbackProvider: secondaryMock,
-      });
+      // Pass the faulty provider explicitly (simulating live provider failure)
+      const service = new MarketDataService(primaryFaulty);
 
       const quotes = await service.getQuotesForSymbols(["RELIANCE", "INFY"]);
       assert.ok(quotes.RELIANCE);
       assert.equal(quotes.RELIANCE.symbol, "RELIANCE");
+      assert.equal(quotes.RELIANCE.dataStatus, "UNAVAILABLE");
+      assert.equal(quotes.RELIANCE.price, null, "Live failure must NEVER fabricate mock price");
+
+      assert.ok(quotes.INFY);
+      assert.equal(quotes.INFY.symbol, "INFY");
+      assert.equal(quotes.INFY.dataStatus, "UNAVAILABLE");
+      assert.equal(quotes.INFY.price, null);
+    });
+
+    test("Explicit Mock provider configuration works deterministically", async () => {
+      const mockProvider = new MockMarketDataProvider("2026-09-07T10:00:00.000Z");
+      const service = new MarketDataService(mockProvider);
+
+      const quotes = await service.getQuotesForSymbols(["RELIANCE", "TCS"]);
+      assert.equal(quotes.RELIANCE.symbol, "RELIANCE");
+      assert.equal(quotes.RELIANCE.price, 2950.0);
       assert.equal(quotes.RELIANCE.dataStatus, "FRESH");
-      assert.equal(quotes.RELIANCE.price, 2950);
+
+      assert.equal(quotes.TCS.symbol, "TCS");
+      assert.equal(quotes.TCS.price, 4200.0);
+      assert.equal(quotes.TCS.dataStatus, "FRESH");
     });
   });
 

@@ -46,7 +46,6 @@ interface CacheEntry<T> {
  */
 export class MarketDataService implements IMarketDataService {
   private provider: IMarketDataProvider;
-  private fallbackProvider: IMarketDataProvider;
   private quoteCache: Map<string, CacheEntry<MarketQuote>> = new Map();
   private baselineCache: Map<string, CacheEntry<InstrumentBaseline>> = new Map();
   private benchmarkCache: CacheEntry<BenchmarkQuote> | null = null;
@@ -62,16 +61,13 @@ export class MarketDataService implements IMarketDataService {
       quoteTtlMs?: number;
       baselineTtlMs?: number;
       benchmarkTtlMs?: number;
-      fallbackProvider?: IMarketDataProvider;
     }
   ) {
-    this.fallbackProvider =
-      options?.fallbackProvider || new MockMarketDataProvider();
-
     if (primaryProvider) {
       this.provider = primaryProvider;
     } else {
-      // Default: Use Yahoo provider in production / normal mode, with mock fallback
+      // Explicit selection: TRACE_MARKET_PROVIDER="mock" or test environment uses mock;
+      // otherwise, live Yahoo provider is strictly used with no silent fallback.
       const useMock =
         process.env.TRACE_MARKET_PROVIDER === "mock" ||
         process.env.NODE_ENV === "test";
@@ -155,50 +151,16 @@ export class MarketDataService implements IMarketDataService {
       return results;
     }
 
-    // 2. Fetch missing quotes from primary provider
+    // 2. Fetch missing quotes from configured provider
     let fetchedQuotes: Record<string, MarketQuote> = {};
     try {
       fetchedQuotes = await this.provider.getQuotes(missingSymbols, exchange);
     } catch {
-      // Primary failed; fallback
-      try {
-        fetchedQuotes = await this.fallbackProvider.getQuotes(
-          missingSymbols,
-          exchange
-        );
-      } catch {
-        fetchedQuotes = {};
-      }
+      // On provider failure, missing symbols will be filled with UNAVAILABLE status below
+      fetchedQuotes = {};
     }
 
-    // 3. For any symbols that returned UNAVAILABLE or failed, attempt fallback if provider wasn't already fallback
-    const fallbackSymbols: string[] = [];
-    for (const sym of missingSymbols) {
-      const quote = fetchedQuotes[sym];
-      if (!quote || quote.dataStatus === "UNAVAILABLE") {
-        if (this.provider.name !== this.fallbackProvider.name) {
-          fallbackSymbols.push(sym);
-        }
-      }
-    }
-
-    if (fallbackSymbols.length > 0) {
-      try {
-        const fallbackQuotes = await this.fallbackProvider.getQuotes(
-          fallbackSymbols,
-          exchange
-        );
-        for (const [sym, quote] of Object.entries(fallbackQuotes)) {
-          if (quote && quote.dataStatus !== "UNAVAILABLE") {
-            fetchedQuotes[sym] = quote;
-          }
-        }
-      } catch {
-        // Ignore fallback errors
-      }
-    }
-
-    // 4. Cache and populate missing results
+    // 3. Cache and populate missing results with strict non-fabrication (UNAVAILABLE)
     for (const sym of missingSymbols) {
       const quote =
         fetchedQuotes[sym] || {
@@ -238,15 +200,7 @@ export class MarketDataService implements IMarketDataService {
     try {
       quote = await this.provider.getBenchmarkQuote();
     } catch {
-      // Ignore primary error
-    }
-
-    if (!quote || quote.dataStatus === "UNAVAILABLE") {
-      try {
-        quote = await this.fallbackProvider.getBenchmarkQuote();
-      } catch {
-        quote = null;
-      }
+      quote = null;
     }
 
     if (quote) {
@@ -271,15 +225,7 @@ export class MarketDataService implements IMarketDataService {
     try {
       baseline = await this.provider.getBaselineMetrics(sym);
     } catch {
-      // Ignore primary error
-    }
-
-    if (!baseline) {
-      try {
-        baseline = await this.fallbackProvider.getBaselineMetrics(sym);
-      } catch {
-        baseline = null;
-      }
+      baseline = null;
     }
 
     if (baseline) {
@@ -299,11 +245,7 @@ export class MarketDataService implements IMarketDataService {
     try {
       return await this.provider.getHistoricalData(symbol, range);
     } catch {
-      try {
-        return await this.fallbackProvider.getHistoricalData(symbol, range);
-      } catch {
-        return [];
-      }
+      return [];
     }
   }
 
